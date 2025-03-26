@@ -12,6 +12,7 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 #import ffmpeg
 import os
+from pathlib import Path
 
 imageList = []
 
@@ -33,8 +34,8 @@ def cancel():
     root.quit()
     root.destroy()
     
+#Retrieves files and their Date Taken property
 def get_files_in_folder(folder_path):
-    """ Retrieves files and their Date Taken property """
     fileList = []
     if os.path.exists(folder_path):
         for filename in os.listdir(folder_path):
@@ -45,8 +46,8 @@ def get_files_in_folder(folder_path):
                 if ext in ["jpg", "jpeg", "png", "heic"]:
                     date_taken = get_date_taken_image(file_path)
                 elif ext in ["mp4", "mov", "avi", "mkv"]:
-                    print("later")
-                   # date_taken = get_date_taken_video(file_path)
+                    date_taken = "We will do this part later"
+                   #date_taken = get_date_taken_video(file_path)
                 else:
                     date_taken = "Unknown"
 
@@ -55,8 +56,8 @@ def get_files_in_folder(folder_path):
         print(f"Folder '{folder_path}' not found.")
     return fileList
 
+#Extracts the Date Taken from image metadata
 def get_date_taken_image(image_path):
-    """ Extracts the Date Taken from image metadata """
     try:
         img = Image.open(image_path)
         exif_data = img._getexif()  # Get EXIF metadata
@@ -69,8 +70,8 @@ def get_date_taken_image(image_path):
         print(f"Could not read Date Taken for image {image_path}: {e}")
     return "Unknown"
 
+#Extracts the Date Taken from video metadata using ffprobe
 #def get_date_taken_video(video_path):
-    """ Extracts the Date Taken from video metadata using ffprobe """
    # try:
        # probe = ffmpeg.probe(video_path)
        # metadata = probe.get("format", {}).get("tags", {})
@@ -81,14 +82,21 @@ def get_date_taken_image(image_path):
   #  return "Unknown"
     
     
-
+#retrieves filenames and Date Taken properties
 def sort():
-    """ Sort function that retrieves filenames and Date Taken properties """
     print("Sorting...")
-    folder_path = original_folder_entry.get()  # Get path from Entry widget
-    imageList = get_files_in_folder(folder_path)  # Get list of files with Date Taken
+    start_folder_path = Path(original_folder_entry.get())  # Get path from Entry widget
+    destination_base_path = Path(destination_folder_entry.get())
+    imageList = get_files_in_folder(start_folder_path)  # Get list of files with Date Taken
     for file, date in imageList:
-        print(f"{file} - Date Taken: {date}\n")
+        if date == "Unknown":
+            year = "Unknown"
+            destination_file_path = destination_base_path / "unknown"
+        else:
+            year = date[:4]
+            destination_file_path = destination_base_path / year
+        
+        print(f"{file} - Date Taken: {date} - File path: {destination_file_path}\n")
 
 # Create the main window (GUI)
 root = tk.Tk()
