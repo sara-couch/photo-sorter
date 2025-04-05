@@ -4,11 +4,13 @@ import tkinter as tk
 from tkinter import filedialog
 from PIL import Image
 from PIL.ExifTags import TAGS
-#import ffmpeg
+import ffmpeg
 import os
 from pathlib import Path
-from hachoir.metadata import extractMetadata
-from hachoir.parser import createParser
+import torch
+from torchvision import models, transforms
+from PIL import Image
+import urllib.request
 
 imageList = []
 
@@ -42,8 +44,7 @@ def get_files_in_folder(folder_path):
                 if ext in ["jpg", "jpeg", "png", "heic"]:
                     date_taken = get_date_taken_image(file_path)
                 elif ext in ["mp4", "mov", "avi", "mkv"]:
-                    date_taken = "We will do this part later"
-                   #date_taken = get_date_taken_video(file_path)
+                    date_taken = get_date_taken_video(file_path)
                 else:
                     date_taken = "Unknown"
 
@@ -67,15 +68,15 @@ def get_date_taken_image(image_path):
     return "Unknown"
 
 #Extracts the Date Taken from video metadata using ffprobe
-#def get_date_taken_video(video_path):
-   # try:
-       # probe = ffmpeg.probe(video_path)
-       # metadata = probe.get("format", {}).get("tags", {})
-      #  date_taken = metadata.get("creation_time", "Unknown")  # Format: "YYYY-MM-DDTHH:MM:SS"
-      #  return date_taken.replace("T", " ")  # Convert to readable format
-  #  except Exception as e:
-    #    print(f"Could not read Date Taken for video {video_path}: {e}")
-  #  return "Unknown"
+def get_date_taken_video(video_path):
+    try:
+        probe = ffmpeg.probe(video_path)
+        metadata = probe.get("format", {}).get("tags", {})
+        date_taken = metadata.get("creation_time", "Unknown")  # Format: "YYYY-MM-DDTHH:MM:SS"
+        return date_taken.replace("T", " ")  # Convert to readable format
+    except Exception as e:
+        print(f"Could not read Date Taken for video {video_path}: {e}")
+    return "Unknown"
     
     
 #retrieves filenames and Date Taken properties
