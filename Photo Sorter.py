@@ -1,11 +1,5 @@
 
 # -*- coding: utf-8 -*-
-"""
-Spyder Editor
-
-This is a temporary script file.
-"""
-
 import tkinter as tk
 from tkinter import filedialog
 from PIL import Image
@@ -13,6 +7,8 @@ from PIL.ExifTags import TAGS
 #import ffmpeg
 import os
 from pathlib import Path
+from hachoir.metadata import extractMetadata
+from hachoir.parser import createParser
 
 imageList = []
 
@@ -91,12 +87,21 @@ def sort():
     for file, date in imageList:
         if date == "Unknown":
             year = "Unknown"
-            destination_file_path = destination_base_path / "unknown"
+            source_file_path = start_folder_path / file
+            destination_file_path = destination_base_path / year / file
+            os.makedirs(destination_file_path.parent, exist_ok=True)
+            source_file_path.rename(destination_file_path)
         else:
             year = date[:4]
-            destination_file_path = destination_base_path / year
+            source_file_path = start_folder_path / file
+            destination_file_path = destination_base_path / year / file
+            os.makedirs(destination_file_path.parent, exist_ok=True)
+            source_file_path.rename(destination_file_path)
         
-        print(f"{file} - Date Taken: {date} - File path: {destination_file_path}\n")
+        print(f"{file} - Date Taken: {date} - Start path: {source_file_path} Dest File path: {destination_file_path}\n")
+
+    root.quit()
+    root.destroy()
 
 # Create the main window (GUI)
 root = tk.Tk()
