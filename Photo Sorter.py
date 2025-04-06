@@ -35,7 +35,8 @@ preprocess = transforms.Compose([
 
 # Load ImageNet labels
 imagenet_labels = None
-with open("C:\\Users\\sarac\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
+#with open("C:\\Users\\sarac\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
+with open("C:\\Users\\ubby0\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
     imagenet_labels = [line.strip() for line in f.readlines()]
 
 def contains_cat(image_path):
