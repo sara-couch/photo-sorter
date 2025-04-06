@@ -9,10 +9,52 @@ import os
 from pathlib import Path
 import torch
 from torchvision import models, transforms
-from PIL import Image
-import urllib.request
+
+
 
 imageList = []
+
+# Load model once globally
+resnet_model = models.resnet50(pretrained=True)
+resnet_model.eval()  # Set to inference mode
+
+cat_labels = [
+    "Egyptian cat", "cat", "tabby cat", "tiger cat", "Persian cat",
+    "Siamese cat", "kitten"
+]
+
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],  # Imagenet normalization
+        std=[0.229, 0.224, 0.225]
+    )
+])
+
+# Load ImageNet labels
+imagenet_labels = None
+with open("C:\\Users\\sarac\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
+    imagenet_labels = [line.strip() for line in f.readlines()]
+
+def contains_cat(image_path):
+    try:
+        img = Image.open(image_path).convert("RGB")
+        input_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension
+        with torch.no_grad():
+            outputs = resnet_model(input_tensor)
+        probs = torch.nn.functional.softmax(outputs[0], dim=0)
+        top5_prob, top5_idx = torch.topk(probs, 5)
+
+        for i in top5_idx:
+            label = imagenet_labels[i]
+            if any(cat_label.lower() in label.lower() for cat_label in cat_labels):
+                return True
+    except Exception as e:
+        print(f"Error analyzing {image_path}: {e}")
+    
+    return False
 
 # Function to open folder dialog and print selected folder
 def select_original_folder():
@@ -85,29 +127,44 @@ def sort():
     start_folder_path = Path(original_folder_entry.get())  # Get path from Entry widget
     destination_base_path = Path(destination_folder_entry.get())
     imageList = get_files_in_folder(start_folder_path)  # Get list of files with Date Taken
+
     for file, date in imageList:
+        source_file_path = start_folder_path / file
+
         if date == "Unknown":
             year = "Unknown"
-            source_file_path = start_folder_path / file
-            destination_file_path = destination_base_path / year / file
-            os.makedirs(destination_file_path.parent, exist_ok=True)
-            source_file_path.rename(destination_file_path)
         else:
             year = date[:4]
-            source_file_path = start_folder_path / file
-            destination_file_path = destination_base_path / year / file
-            os.makedirs(destination_file_path.parent, exist_ok=True)
+
+        # Default destination folder
+        destination_folder = destination_base_path / year
+
+        # If it's an image and should be checked for cats
+        if file.lower().endswith((".jpg", ".jpeg", ".png", ".heic")):
+            if sort_cats_option.get() and contains_cat(source_file_path):
+                destination_folder = destination_folder / "cats"
+
+        destination_file_path = destination_folder / file
+        os.makedirs(destination_file_path.parent, exist_ok=True)
+
+        try:
             source_file_path.rename(destination_file_path)
-        
-        print(f"{file} - Date Taken: {date} - Start path: {source_file_path} Dest File path: {destination_file_path}\n")
+        except Exception as e:
+            print(f"Could not move {source_file_path} to {destination_file_path}: {e}")
+
+        print(f"{file} - Date Taken: {date} - Moved to: {destination_file_path}")
 
     root.quit()
     root.destroy()
 
 # Create the main window (GUI)
+
+
 root = tk.Tk()
 root.title("Select a Folder")  # Set window title
 root.geometry("600x300")  # Set window size
+sort_cats_option = tk.BooleanVar()
+sort_cats_option.set(False)
 
 # Create the labels, entries, buttons
 original_folder_label = tk.Label(root, text="Original Folder: ")
@@ -116,7 +173,7 @@ select_original_button = tk.Button(root, text="Select Folder", command=select_or
 destination_folder_label = tk.Label(root, text="Destination Folder: ")
 destination_folder_entry = tk.Entry(root)
 select_destination_button = tk.Button(root, text="Select Folder", command=select_destination_folder)
-sort_cats_label = tk.Label(root, text="Sort cats:")
+sort_cats_checkbox = tk.Checkbutton(root, text="Sort cat photos into separate folders: ", variable=sort_cats_option)
 sort_button = tk.Button(root, text="Sort!", command=sort)
 cancel_button = tk.Button(root, text="Cancel", command=cancel)
 
@@ -131,7 +188,7 @@ destination_folder_entry.grid(row=1, column=1, padx=5, pady=10, sticky="ew")  # 
 select_destination_button.grid(row=1, column=2, padx=5, pady=10)
 
 #Row 3
-sort_cats_label.grid(row=3, column=0, padx=5, pady=10)
+sort_cats_checkbox.grid(row=3, column=0, columnspan=2, padx=5, pady=10, sticky="w")
 sort_button.grid(row=3, column=1, padx=5, pady=10, sticky="e")
 cancel_button.grid(row=3, column=2, padx=5, pady=10)
 
