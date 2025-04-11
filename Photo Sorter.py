@@ -1,53 +1,61 @@
 
 # -*- coding: utf-8 -*-
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, ttk, messagebox
 from PIL import Image
 from PIL.ExifTags import TAGS
 import ffmpeg
 import os
 from pathlib import Path
 import torch
-from torchvision import models, transforms
+from torchvision import models, transforms #models is ResNet, transforms is preprocessing
 
 
+# Load pre-trained ResNet50 model once globally. Remember, models comes from torchvision
+resnet_model = models.resnet50(pretrained=True) 
+resnet_model.eval()  # Set to evaluation mode rather than training mode
 
-imageList = []
-
-# Load model once globally
-resnet_model = models.resnet50(pretrained=True)
-resnet_model.eval()  # Set to inference mode
-
+#why tf ResNet50 has such weird pretrained? Might consider a different model in the future
 cat_labels = [
     "Egyptian cat", "cat", "tabby cat", "tiger cat", "Persian cat",
     "Siamese cat", "kitten"
 ]
 
-preprocess = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
+
+#preprocess before feeding to the ResNet50 beast nom nom nom
+#preprocess block: <image> → Resize → Crop → Tensor → Normalize → ready for model
+preprocess = transforms.Compose([ #composes all the following transformations
+    transforms.Resize(256), #resizes because ResNet was trained on tiny photos apparently
+    transforms.CenterCrop(224), #crops the photo but maintains the center part because ResNet50 was apparently trained on tiny photos. May need to consider about pictures where a cat is on the edge of the og photo.
+    transforms.ToTensor(), #required because pytorch says so
     transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],  # Imagenet normalization
+        mean=[0.485, 0.456, 0.406],  #Mean and std values here are based on ImageNet's training set
         std=[0.229, 0.224, 0.225]
     )
 ])
 
 # Load ImageNet labels
 imagenet_labels = None
-#with open("C:\\Users\\sarac\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
-with open("C:\\Users\\ubby0\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
+with open("C:\\Users\\sarac\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
+#with open("C:\\Users\\ubby0\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
     imagenet_labels = [line.strip() for line in f.readlines()]
 
 def contains_cat(image_path):
     try:
         img = Image.open(image_path).convert("RGB")
-        input_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension
-        with torch.no_grad():
-            outputs = resnet_model(input_tensor)
-        probs = torch.nn.functional.softmax(outputs[0], dim=0)
-        top5_prob, top5_idx = torch.topk(probs, 5)
+        #turn the image into a tensor because pytorch says so
+        input_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension, the model expects a batch even if it’s just 1 image. Unsqueeze is a weird term for that but I'm rolling with it
+        with torch.no_grad(): #turns off gradient tracking since we’re just doing evaluation not training
+            outputs = resnet_model(input_tensor) #runs the image through the model and returns a tensor of logits — one score for each of the 1,000 ImageNet classes.
+        probs = torch.nn.functional.softmax(outputs[0], dim=0) #The model outputs logits (raw scores) but we want probabilities. softmax turns those logits into percentages that all add up to 1. outputs[0] selects the first (and only) image in our batch.
+        top5_prob, top5_idx = torch.topk(probs, 5) #grabs the top 5 predictions from the model. top5_prob is the list of probabilities. top5_idx is the list of indices — e.g. [281, 285, 283, 282, 287].
 
+
+#checks if any of the top 5 labels include a known cat label.
+#returns True as soon as it finds a match — no need to check the rest.
+#Example:
+    #label = "tabby cat"
+    #One cat_labels is "tabby cat" so it returns True
         for i in top5_idx:
             label = imagenet_labels[i]
             if any(cat_label.lower() in label.lower() for cat_label in cat_labels):
@@ -79,9 +87,9 @@ def cancel():
 def get_files_in_folder(folder_path):
     fileList = []
     if os.path.exists(folder_path):
-        for filename in os.listdir(folder_path):
+        for filename in os.listdir(folder_path): #loop through every file in the base folder
             file_path = os.path.join(folder_path, filename)
-            if os.path.isfile(file_path):
+            if os.path.isfile(file_path): #skips subfolders (for now. will work on this later)
                 # Determine if it's an image or video
                 ext = filename.lower().split('.')[-1]
                 if ext in ["jpg", "jpeg", "png", "heic"]:
@@ -121,26 +129,35 @@ def get_date_taken_video(video_path):
         print(f"Could not read Date Taken for video {video_path}: {e}")
     return "Unknown"
     
-    
-#retrieves filenames and Date Taken properties
+
+
+#main chungus of a function. Does the actual sorting into folders
 def sort():
     print("Sorting...")
-    start_folder_path = Path(original_folder_entry.get())  # Get path from Entry widget
+    start_folder_path = Path(original_folder_entry.get())
     destination_base_path = Path(destination_folder_entry.get())
-    imageList = get_files_in_folder(start_folder_path)  # Get list of files with Date Taken
+    imageList = get_files_in_folder(start_folder_path)
 
-    for file, date in imageList:
+    total_files = len(imageList)
+    unknown_count = 0
+    sorted_count = 0
+
+    progress["maximum"] = total_files #progress bar
+    progress["value"] = 0
+    root.update_idletasks() #makes the GUI update now now now rather than later
+
+    for index, (file, date) in enumerate(imageList):
         source_file_path = start_folder_path / file
 
         if date == "Unknown":
             year = "Unknown"
+            unknown_count += 1
         else:
             year = date[:4]
+            sorted_count += 1
 
-        # Default destination folder
         destination_folder = destination_base_path / year
 
-        # If it's an image and should be checked for cats
         if file.lower().endswith((".jpg", ".jpeg", ".png", ".heic")):
             if sort_cats_option.get() and contains_cat(source_file_path):
                 destination_folder = destination_folder / "cats"
@@ -155,12 +172,17 @@ def sort():
 
         print(f"{file} - Date Taken: {date} - Moved to: {destination_file_path}")
 
+        progress["value"] = index + 1
+        root.update_idletasks()
+
+    messagebox.showinfo("Done", f"Sorting complete!\n\n"
+                                f"Files sorted by year: {sorted_count}\n"
+                                f"Files with unknown dates: {unknown_count}")
     root.quit()
     root.destroy()
 
+
 # Create the main window (GUI)
-
-
 root = tk.Tk()
 root.title("Select a Folder")  # Set window title
 root.geometry("600x300")  # Set window size
@@ -193,6 +215,9 @@ sort_cats_checkbox.grid(row=3, column=0, columnspan=2, padx=5, pady=10, sticky="
 sort_button.grid(row=3, column=1, padx=5, pady=10, sticky="e")
 cancel_button.grid(row=3, column=2, padx=5, pady=10)
 
+# Progress bar
+progress = ttk.Progressbar(root, orient="horizontal", mode="determinate")
+progress.grid(row=4, column=0, columnspan=3, padx=10, pady=10, sticky="ew")
 
 # Configure the column weights to make entry expand
 root.grid_columnconfigure(1, weight=1, uniform="equal")  # Make column 1 (entry) expand
