@@ -6,3 +6,4 @@ Future tasks:
   1) Tweak the AI to sort the cats better. Seems to miss a few.
   2) Progress bar?
   3) Set it so the Original folder also dives into sub folders looking for photos.
+  4) For "unknown" files, make it an option to review ones that can be guess (ie in between two from the same year), maybe use AI?
