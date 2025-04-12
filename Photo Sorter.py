@@ -1,5 +1,3 @@
-
-# -*- coding: utf-8 -*-
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 from PIL import Image
@@ -8,11 +6,13 @@ import ffmpeg
 import os
 from pathlib import Path
 import torch
-from torchvision import models, transforms #models is ResNet, transforms is preprocessing
+from torchvision import transforms #models is ResNet, transforms is preprocessing
+from torchvision.models import resnet50, ResNet50_Weights
 
 
 # Load pre-trained ResNet50 model once globally. Remember, models comes from torchvision
-resnet_model = models.resnet50(pretrained=True) 
+weights = ResNet50_Weights.DEFAULT
+resnet_model = resnet50(weights=weights)
 resnet_model.eval()  # Set to evaluation mode rather than training mode
 
 #why tf ResNet50 has such weird pretrained? Might consider a different model in the future
@@ -35,10 +35,7 @@ preprocess = transforms.Compose([ #composes all the following transformations
 ])
 
 # Load ImageNet labels
-imagenet_labels = None
-with open("C:\\Users\\sarac\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
-#with open("C:\\Users\\ubby0\\OneDrive\\Documents\\GitHub\\photo-sorter\\imagenet_classes.txt") as f:
-    imagenet_labels = [line.strip() for line in f.readlines()]
+imagenet_labels = weights.meta["categories"]
 
 def contains_cat(image_path):
     try:
@@ -87,19 +84,20 @@ def cancel():
 def get_files_in_folder(folder_path):
     fileList = []
     if os.path.exists(folder_path):
-        for filename in os.listdir(folder_path): #loop through every file in the base folder
-            file_path = os.path.join(folder_path, filename)
-            if os.path.isfile(file_path): #skips subfolders (for now. will work on this later)
-                # Determine if it's an image or video
-                ext = filename.lower().split('.')[-1]
-                if ext in ["jpg", "jpeg", "png", "heic"]:
-                    date_taken = get_date_taken_image(file_path)
-                elif ext in ["mp4", "mov", "avi", "mkv"]:
-                    date_taken = get_date_taken_video(file_path)
-                else:
-                    date_taken = "Unknown"
+        for root_dir, dirs, files in os.walk(folder_path): #gets files and subfolders using os.walk() rather than listdir
+            for filename in files:
+                file_path = os.path.join(root_dir, filename)
+                if os.path.isfile(file_path):
+                    # Determine if it's an image or video
+                    ext = filename.lower().split('.')[-1]
+                    if ext in ["jpg", "jpeg", "png", "heic"]:
+                        date_taken = get_date_taken_image(file_path)
+                    elif ext in ["mp4", "mov", "avi", "mkv"]:
+                        date_taken = get_date_taken_video(file_path)
+                    else:
+                        date_taken = "Unknown"
 
-                fileList.append((filename, date_taken))  # Store filename and Date Taken
+                    fileList.append((file_path, date_taken))  # Store full path + Date Taken
     else:
         print(f"Folder '{folder_path}' not found.")
     return fileList
@@ -147,8 +145,8 @@ def sort():
     root.update_idletasks() #makes the GUI update now now now rather than later
 
     for index, (file, date) in enumerate(imageList):
-        source_file_path = start_folder_path / file
-
+        source_file_path = Path(file)
+        
         if date == "Unknown":
             year = "Unknown"
             unknown_count += 1
@@ -162,7 +160,7 @@ def sort():
             if sort_cats_option.get() and contains_cat(source_file_path):
                 destination_folder = destination_folder / "cats"
 
-        destination_file_path = destination_folder / file
+        destination_file_path = destination_folder / source_file_path.name
         os.makedirs(destination_file_path.parent, exist_ok=True)
 
         try:
@@ -182,10 +180,26 @@ def sort():
     root.destroy()
 
 
-# Create the main window (GUI)
+# Create the GUI
 root = tk.Tk()
 root.title("Select a Folder")  # Set window title
 root.geometry("600x300")  # Set window size
+#screen width and height for centering GUI
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+
+# set window width and height
+window_width = 600
+window_height = 300
+
+# Calculate position x, y for centering GUI
+x = int((screen_width / 2) - (window_width / 2))
+y = int((screen_height / 2) - (window_height / 2))
+
+root.geometry(f"{window_width}x{window_height}+{x}+{y}") #final boss for entering GUI
+root.lift() #makes the GUI pop up
+root.attributes("-topmost", True)
+root.after_idle(root.attributes, "-topmost", False)
 sort_cats_option = tk.BooleanVar()
 sort_cats_option.set(False)
 
