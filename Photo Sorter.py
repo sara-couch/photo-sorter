@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 from torchvision import transforms #models is ResNet, transforms is preprocessing
 from torchvision.models import resnet50, ResNet50_Weights
+from datetime import datetime
 
 
 # Load pre-trained ResNet50 model once globally. Remember, models comes from torchvision
@@ -85,7 +86,7 @@ def get_files_in_folder(folder_path):
     fileList = []
     if os.path.exists(folder_path):
         for root_dir, dirs, files in os.walk(folder_path): #gets files and subfolders using os.walk() rather than listdir
-            for filename in files:
+            for filename in sorted(files):
                 file_path = os.path.join(root_dir, filename)
                 if os.path.isfile(file_path):
                     # Determine if it's an image or video
@@ -126,6 +127,34 @@ def get_date_taken_video(video_path):
     except Exception as e:
         print(f"Could not read Date Taken for video {video_path}: {e}")
     return "Unknown"
+
+def estimate_date(index, file_list):
+    prev_date = None
+    next_date = None
+
+    # Look backwards for previous known date
+    for i in range(index - 1, -1, -1):
+        if file_list[i][1] != "Unknown":
+            prev_date = datetime.strptime(file_list[i][1], "%Y:%m:%d %H:%M:%S")
+            break
+
+    # Look forwards for next known date
+    for i in range(index + 1, len(file_list)):
+        if file_list[i][1] != "Unknown":
+            next_date = datetime.strptime(file_list[i][1], "%Y:%m:%d %H:%M:%S")
+            break
+
+    if prev_date and next_date:
+        # Average the two dates
+        estimated = prev_date + (next_date - prev_date) / 2
+    elif prev_date:
+        estimated = prev_date
+    elif next_date:
+        estimated = next_date
+    else:
+        return "Unknown"
+
+    return estimated.strftime("%Y:%m:%d %H:%M:%S")
     
 
 #main chungus of a function. Does the actual sorting into folders
@@ -134,6 +163,7 @@ def sort():
     start_folder_path = Path(original_folder_entry.get())
     destination_base_path = Path(destination_folder_entry.get())
     imageList = get_files_in_folder(start_folder_path)
+    unknownList=[]
 
     total_files = len(imageList)
     unknown_count = 0
@@ -149,6 +179,9 @@ def sort():
         if date == "Unknown":
             year = "Unknown"
             unknown_count += 1
+            #considering passing this to sort_unknown. 
+            estimated_date = estimate_date(index, imageList)
+            unknownList.append((file, estimated_date))
         else:
             year = date[:4]
             sorted_count += 1
@@ -172,6 +205,7 @@ def sort():
         progress["value"] = index + 1
         root.update_idletasks()
 
+    print(unknownList)
     response = messagebox.askyesnocancel("Done", f"Sorting complete!\n\n"
                                 f"Files sorted by year: {sorted_count}\n"
                                 f"Files with unknown dates: {unknown_count}\n\n"
@@ -212,6 +246,8 @@ def sort_unknown():
     # UI elements
     status_label = ttk.Label(root, text="")
     image_label = ttk.Label(root)
+    add_date_label = ttk.Label(root, text="Similar photos found. Add suggested date?")
+    suggested_date_label = ttk.Label(root, text="placeholder for suggested date")
     
     def update_display():
         index = current_index.get()
@@ -242,11 +278,15 @@ def sort_unknown():
     # Place UI in grid
     status_label.grid(row=1, column=0, columnspan=3, pady=(10, 0))
     image_label.grid(row=2, column=0, columnspan=3, pady=(10, 0))
+    add_date_label.grid(row=3, column=0, pady=(10,0))
+    suggested_date_label.grid(row=3, column=1, pady=(10,0))
 
+    add_date_button = ttk.Button(root, text="Add suggested date")
     previous_button = ttk.Button(root, text="Previous Picture", command=go_previous)
     next_button = ttk.Button(root, text="Next Picture", command=go_next)
     quit_button = ttk.Button(root, text="Quit", command=cancel)
 
+    add_date_button.grid(row=3, column=3, padx=5, pady=10, sticky="ew")
     previous_button.grid(row=4, column=0, padx=5, pady=10, sticky="ew")
     next_button.grid(row=4, column=1, padx=5, pady=10, sticky="ew")
     quit_button.grid(row=4, column=2, padx=5, pady=10, sticky="ew")
