@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
-from PIL import Image
+from PIL import Image, ImageTk
 from PIL.ExifTags import TAGS
 import ffmpeg
 import os
@@ -128,7 +128,6 @@ def get_date_taken_video(video_path):
     return "Unknown"
     
 
-
 #main chungus of a function. Does the actual sorting into folders
 def sort():
     print("Sorting...")
@@ -173,12 +172,90 @@ def sort():
         progress["value"] = index + 1
         root.update_idletasks()
 
-    messagebox.showinfo("Done", f"Sorting complete!\n\n"
+    response = messagebox.askyesnocancel("Done", f"Sorting complete!\n\n"
                                 f"Files sorted by year: {sorted_count}\n"
-                                f"Files with unknown dates: {unknown_count}")
-    root.quit()
-    root.destroy()
+                                f"Files with unknown dates: {unknown_count}\n\n"
+                                f"Would you like to go through the unknown files that have similar dates?")
 
+
+    if response is True:
+        sort_unknown()
+    else:
+        print("Either No or Cancel button clicked")         
+        root.quit()
+        root.destroy()
+        
+        
+def sort_unknown():
+    unknown_folder_path = Path(destination_folder_entry.get()) / "Unknown"
+    print(unknown_folder_path)
+    
+    
+    # Clear the main window
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    unknown_files = [
+        f for f in os.listdir(unknown_folder_path)
+        if f.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
+    unknown_paths = [os.path.join(unknown_folder_path, f) for f in unknown_files]
+
+    if not unknown_paths:
+        label = ttk.Label(root, text="No unknown images found.")
+        label.grid(row=0, column=0, columnspan=3, padx=10, pady=10)
+        return
+
+    # Track current image index
+    current_index = tk.IntVar(value=0)
+
+    # UI elements
+    status_label = ttk.Label(root, text="")
+    image_label = ttk.Label(root)
+    
+    def update_display():
+        index = current_index.get()
+        path = unknown_paths[index]
+        
+        # Load and resize image
+        image = Image.open(path)
+        image.thumbnail((600, 600))  # Resize to fit nicely
+        photo = ImageTk.PhotoImage(image)
+        image_label.image = photo  # Prevent garbage collection
+        image_label.config(image=photo)
+
+        # Update status text
+        status_label.config(text=f"Picture {index + 1} of {len(unknown_paths)}")
+
+        # Enable/disable buttons
+        previous_button["state"] = tk.NORMAL if index > 0 else tk.DISABLED
+        next_button["state"] = tk.NORMAL if index < len(unknown_paths) - 1 else tk.DISABLED
+
+    def go_previous():
+        current_index.set(current_index.get() - 1)
+        update_display()
+
+    def go_next():
+        current_index.set(current_index.get() + 1)
+        update_display()
+
+    # Place UI in grid
+    status_label.grid(row=1, column=0, columnspan=3, pady=(10, 0))
+    image_label.grid(row=2, column=0, columnspan=3, pady=(10, 0))
+
+    previous_button = ttk.Button(root, text="Previous Picture", command=go_previous)
+    next_button = ttk.Button(root, text="Next Picture", command=go_next)
+    quit_button = ttk.Button(root, text="Quit", command=cancel)
+
+    previous_button.grid(row=4, column=0, padx=5, pady=10, sticky="ew")
+    next_button.grid(row=4, column=1, padx=5, pady=10, sticky="ew")
+    quit_button.grid(row=4, column=2, padx=5, pady=10, sticky="ew")
+
+    root.grid_columnconfigure(0, weight=1)
+    root.grid_columnconfigure(1, weight=1)
+    root.grid_columnconfigure(2, weight=1)
+
+    update_display()
 
 # Create the GUI
 root = tk.Tk()
