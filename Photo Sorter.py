@@ -131,21 +131,15 @@ def get_date_taken_video(video_path):
 def estimate_date(index, file_list):
     prev_date = None
     next_date = None
-
-    # Look backwards for previous known date
     for i in range(index - 1, -1, -1):
         if file_list[i][1] != "Unknown":
             prev_date = datetime.strptime(file_list[i][1], "%Y:%m:%d %H:%M:%S")
             break
-
-    # Look forwards for next known date
     for i in range(index + 1, len(file_list)):
         if file_list[i][1] != "Unknown":
             next_date = datetime.strptime(file_list[i][1], "%Y:%m:%d %H:%M:%S")
             break
-
     if prev_date and next_date:
-        # Average the two dates
         estimated = prev_date + (next_date - prev_date) / 2
     elif prev_date:
         estimated = prev_date
@@ -153,7 +147,6 @@ def estimate_date(index, file_list):
         estimated = next_date
     else:
         return "Unknown"
-
     return estimated.strftime("%Y:%m:%d %H:%M:%S")
     
 
@@ -213,27 +206,24 @@ def sort():
 
 
     if response is True:
-        sort_unknown()
+        sort_unknown(unknownList)
     else:
         print("Either No or Cancel button clicked")         
         root.quit()
         root.destroy()
         
         
-def sort_unknown():
+def sort_unknown(unknownList):
     unknown_folder_path = Path(destination_folder_entry.get()) / "Unknown"
-    print(unknown_folder_path)
-    
     
     # Clear the main window
     for widget in root.winfo_children():
         widget.destroy()
 
-    unknown_files = [
-        f for f in os.listdir(unknown_folder_path)
-        if f.lower().endswith((".jpg", ".jpeg", ".png"))
-    ]
-    unknown_paths = [os.path.join(unknown_folder_path, f) for f in unknown_files]
+    # unknownList already contains (full_path, estimated_date)
+    unknown_items = [(str(Path(f).name), est) for f, est in unknownList]
+
+    unknown_paths = [(str(unknown_folder_path / fname), est) for fname, est in unknown_items]
 
     if not unknown_paths:
         label = ttk.Label(root, text="No unknown images found.")
@@ -247,11 +237,12 @@ def sort_unknown():
     status_label = ttk.Label(root, text="")
     image_label = ttk.Label(root)
     add_date_label = ttk.Label(root, text="Similar photos found. Add suggested date?")
-    suggested_date_label = ttk.Label(root, text="placeholder for suggested date")
+    suggested_date_label = ttk.Label(root, text="")
     
     def update_display():
         index = current_index.get()
-        path = unknown_paths[index]
+        path, est_date = unknown_paths[index]
+        suggested_date_label.config(text=est_date)
         
         # Load and resize image
         image = Image.open(path)
@@ -278,15 +269,15 @@ def sort_unknown():
     # Place UI in grid
     status_label.grid(row=1, column=0, columnspan=3, pady=(10, 0))
     image_label.grid(row=2, column=0, columnspan=3, pady=(10, 0))
-    add_date_label.grid(row=3, column=0, pady=(10,0))
-    suggested_date_label.grid(row=3, column=1, pady=(10,0))
+    add_date_label.grid(row=3, column=0, columnspan=2, padx=(10, 0), pady=(10,0), sticky="ew")
+    suggested_date_label.grid(row=3, column=2, pady=(10,0), sticky="ew")
 
     add_date_button = ttk.Button(root, text="Add suggested date")
     previous_button = ttk.Button(root, text="Previous Picture", command=go_previous)
     next_button = ttk.Button(root, text="Next Picture", command=go_next)
     quit_button = ttk.Button(root, text="Quit", command=cancel)
 
-    add_date_button.grid(row=3, column=3, padx=5, pady=10, sticky="ew")
+    add_date_button.grid(row=3, column=3, padx=(5, 10), pady=10, sticky="ew")
     previous_button.grid(row=4, column=0, padx=5, pady=10, sticky="ew")
     next_button.grid(row=4, column=1, padx=5, pady=10, sticky="ew")
     quit_button.grid(row=4, column=2, padx=5, pady=10, sticky="ew")
@@ -297,7 +288,7 @@ def sort_unknown():
 
     update_display()
 
-# Create the GUI
+# Create the first GUI
 root = tk.Tk()
 root.title("Select a Folder")  # Set window title
 root.geometry("600x300")  # Set window size
