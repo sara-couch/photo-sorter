@@ -9,6 +9,7 @@ import torch
 from torchvision import transforms #models is ResNet, transforms is preprocessing
 from torchvision.models import resnet50, ResNet50_Weights
 from datetime import datetime
+import piexif
 
 
 # Load pre-trained ResNet50 model once globally. Remember, models comes from torchvision
@@ -148,6 +149,28 @@ def estimate_date(index, file_list):
     else:
         return "Unknown"
     return estimated.strftime("%Y:%m:%d %H:%M:%S")
+
+def set_date_taken_image(image_path, date_str):
+    """
+    Update the 'DateTimeOriginal' EXIF tag for a image.
+    :param image_path: Path to the image file.
+    :param date_str: Date in "YYYY:MM:DD HH:MM:SS" format.
+    """
+    try:
+        # Load the existing EXIF data
+        exif_dict = piexif.load(image_path)
+
+        # Convert to bytes and set new date
+        date_bytes = date_str.encode('utf-8')
+        exif_dict['Exif'][piexif.ExifIFD.DateTimeOriginal] = date_bytes
+        exif_dict['0th'][piexif.ImageIFD.DateTime] = date_bytes  # Often useful for consistency
+
+        # Save back to the file
+        exif_bytes = piexif.dump(exif_dict)
+        piexif.insert(exif_bytes, image_path)
+        print(f"Updated 'Date Taken' for {image_path} to {date_str}")
+    except Exception as e:
+        print(f"Error updating 'Date Taken' for {image_path}: {e}")
     
 
 #main chungus of a function. Does the actual sorting into folders
@@ -213,14 +236,14 @@ def sort():
         root.destroy()
         
         
-def sort_unknown(unknownList):
+def sort_unknown(unknownList): #man this function escalated might need to clean up
     unknown_folder_path = Path(destination_folder_entry.get()) / "Unknown"
     
-    # Clear the main window
+    #Clear the main window
     for widget in root.winfo_children():
         widget.destroy()
 
-    # unknownList already contains (full_path, estimated_date)
+    #unknownList already contains (full_path, estimated_date)
     unknown_items = [(str(Path(f).name), est) for f, est in unknownList]
 
     unknown_paths = [(str(unknown_folder_path / fname), est) for fname, est in unknown_items]
@@ -246,7 +269,7 @@ def sort_unknown(unknownList):
         
         # Load and resize image
         image = Image.open(path)
-        image.thumbnail((600, 600))  # Resize to fit nicely
+        image.thumbnail((600, 600))  # Resize to fit in gui
         photo = ImageTk.PhotoImage(image)
         image_label.image = photo  # Prevent garbage collection
         image_label.config(image=photo)
@@ -266,13 +289,23 @@ def sort_unknown(unknownList):
         current_index.set(current_index.get() + 1)
         update_display()
 
-    # Place UI in grid
+    # Place UI in grid, tkinter kind of ugly results may make prettier UI in the future
     status_label.grid(row=1, column=0, columnspan=3, pady=(10, 0))
     image_label.grid(row=2, column=0, columnspan=3, pady=(10, 0))
     add_date_label.grid(row=3, column=0, columnspan=2, padx=(10, 0), pady=(10,0), sticky="ew")
     suggested_date_label.grid(row=3, column=2, pady=(10,0), sticky="ew")
 
     add_date_button = ttk.Button(root, text="Add suggested date")
+    def add_suggested_date():
+        index = current_index.get()
+        path, est_date = unknown_paths[index]
+        if est_date != "Unknown" and path.lower().endswith((".jpg", ".jpeg", ".heic")):
+            set_date_taken_image(path, est_date)
+            messagebox.showinfo("Success", f"Updated date for {Path(path).name} to {est_date}")
+        else:
+            messagebox.showwarning("Unsupported", "Only JPEG/HEIC images can be updated.")
+
+    add_date_button.config(command=add_suggested_date)
     previous_button = ttk.Button(root, text="Previous Picture", command=go_previous)
     next_button = ttk.Button(root, text="Next Picture", command=go_next)
     quit_button = ttk.Button(root, text="Quit", command=cancel)
